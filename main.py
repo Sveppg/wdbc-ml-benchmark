@@ -1,7 +1,8 @@
 import time
-import pandas as pd
-import numpy as np
+
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
@@ -10,6 +11,8 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
 from sklearn.naive_bayes import GaussianNB
 from sklearn.neighbors import KNeighborsClassifier
+from sklearn.svm import SVC
+from sklearn.ensemble import RandomForestClassifier
 
 from sklearn.metrics import (
     accuracy_score,
@@ -102,7 +105,6 @@ X_train, X_test, y_train, y_test = train_test_split(
 # ============================================================
 # 4. Modelle
 # ============================================================
-
 models = {
 
     "Logistic Regression": Pipeline([
@@ -120,20 +122,30 @@ models = {
         ("model", KNeighborsClassifier(
             n_neighbors=5
         ))
-    ])
+    ]),
+
+    "SVM": Pipeline([
+        ("scaler", StandardScaler()),
+        ("model", SVC(
+            probability=False,
+            random_state=42
+        ))
+    ]),
+
+    "Random Forest": RandomForestClassifier(
+        n_estimators=100,
+        random_state=42,
+        n_jobs=-1
+    )
 }
 
-
 # ============================================================
-# 5. Funktion zur Modellbewertung
+# 5. Modell bewerten
 # ============================================================
 
 def evaluate_model(name, model):
 
-    # --------------------
-    # Training
-    # --------------------
-
+    # Trainingszeit
     start = time.perf_counter()
 
     model.fit(X_train, y_train)
@@ -141,10 +153,7 @@ def evaluate_model(name, model):
     training_time = time.perf_counter() - start
 
 
-    # --------------------
-    # Prediction
-    # --------------------
-
+    # Vorhersagezeit
     start = time.perf_counter()
 
     y_pred = model.predict(X_test)
@@ -152,10 +161,7 @@ def evaluate_model(name, model):
     prediction_time = time.perf_counter() - start
 
 
-    # --------------------
     # Metriken
-    # --------------------
-
     metrics = {
         "Accuracy": accuracy_score(y_test, y_pred),
         "Precision": precision_score(y_test, y_pred),
@@ -166,10 +172,7 @@ def evaluate_model(name, model):
     }
 
 
-    # --------------------
     # Ausgabe
-    # --------------------
-
     print("\n" + "=" * 55)
     print(name.upper())
     print("=" * 55)
@@ -191,7 +194,6 @@ def evaluate_model(name, model):
 
     print("\nConfusion Matrix:")
     print(confusion_matrix(y_test, y_pred))
-
 
     return metrics, y_pred
 
@@ -219,10 +221,12 @@ for name, model in models.items():
 # 7. Confusion Matrices
 # ============================================================
 
+number_of_models = len(models)
+
 fig, axes = plt.subplots(
     1,
-    3,
-    figsize=(15, 4)
+    number_of_models,
+    figsize=(5 * number_of_models, 4)
 )
 
 
@@ -234,10 +238,7 @@ for ax, (name, y_pred) in zip(
     ConfusionMatrixDisplay.from_predictions(
         y_test,
         y_pred,
-        display_labels=[
-            "Benign",
-            "Malignant"
-        ],
+        display_labels=["Benign", "Malignant"],
         ax=ax,
         colorbar=False
     )
@@ -251,10 +252,11 @@ fig.suptitle(
 
 plt.tight_layout()
 
-# Optional für dein Paper:
+# Für das Paper:
 # plt.savefig(
 #     "confusion_matrices.png",
-#     dpi=300
+#     dpi=300,
+#     bbox_inches="tight"
 # )
 
 plt.show()
@@ -280,7 +282,6 @@ for name, model in models.items():
     )
 
 
-# Zufallsklassifikator
 ax.plot(
     [0, 1],
     [0, 1],
@@ -296,10 +297,10 @@ ax.legend()
 
 plt.tight_layout()
 
-# Optional:
 # plt.savefig(
 #     "roc_curves.png",
-#     dpi=300
+#     dpi=300,
+#     bbox_inches="tight"
 # )
 
 plt.show()
@@ -321,11 +322,13 @@ x = np.arange(
     len(metric_names)
 )
 
-width = 0.25
+number_of_models = len(models)
+
+width = 0.8 / number_of_models
 
 
 fig, ax = plt.subplots(
-    figsize=(10, 6)
+    figsize=(11, 6)
 )
 
 
@@ -338,13 +341,12 @@ for index, (name, metrics) in enumerate(
         for metric in metric_names
     ]
 
-    position = (
-        x
-        + (index - 1) * width
-    )
+    offset = (
+        index - (number_of_models - 1) / 2
+    ) * width
 
     ax.bar(
-        position,
+        x + offset,
         values,
         width,
         label=name
@@ -374,10 +376,10 @@ ax.legend()
 
 plt.tight_layout()
 
-# Optional:
 # plt.savefig(
 #     "performance_comparison.png",
-#     dpi=300
+#     dpi=300,
+#     bbox_inches="tight"
 # )
 
 plt.show()
@@ -412,7 +414,7 @@ width = 0.35
 
 
 fig, ax = plt.subplots(
-    figsize=(10, 6)
+    figsize=(11, 6)
 )
 
 
@@ -449,10 +451,10 @@ ax.legend()
 
 plt.tight_layout()
 
-# Optional:
 # plt.savefig(
 #     "runtime_comparison.png",
-#     dpi=300
+#     dpi=300,
+#     bbox_inches="tight"
 # )
 
 plt.show()
