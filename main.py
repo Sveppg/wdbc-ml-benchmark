@@ -1,3 +1,4 @@
+import time
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -8,12 +9,14 @@ from sklearn.preprocessing import StandardScaler
 
 from sklearn.linear_model import LogisticRegression
 from sklearn.naive_bayes import GaussianNB
+from sklearn.neighbors import KNeighborsClassifier
 
 from sklearn.metrics import (
     accuracy_score,
     precision_score,
     recall_score,
     f1_score,
+    confusion_matrix,
     ConfusionMatrixDisplay,
     RocCurveDisplay
 )
@@ -73,11 +76,10 @@ df = pd.read_csv(
 # 2. Features und Zielvariable
 # ============================================================
 
-# ID und Diagnose sind keine Features
 X = df.drop(columns=["id", "diagnosis"])
 
-# 1 = malignant
-# 0 = benign
+# malignant = 1
+# benign    = 0
 y = df["diagnosis"].map({
     "M": 1,
     "B": 0
@@ -98,133 +100,184 @@ X_train, X_test, y_train, y_test = train_test_split(
 
 
 # ============================================================
-# 4. Modelle definieren
+# 4. Modelle
 # ============================================================
 
-logistic_model = Pipeline([
-    ("scaler", StandardScaler()),
-    ("model", LogisticRegression(
-        max_iter=1000,
-        random_state=42
-    ))
-])
+models = {
 
+    "Logistic Regression": Pipeline([
+        ("scaler", StandardScaler()),
+        ("model", LogisticRegression(
+            max_iter=1000,
+            random_state=42
+        ))
+    ]),
 
-bayes_model = GaussianNB()
+    "Gaussian Naive Bayes": GaussianNB(),
 
-
-# ============================================================
-# 5. Modelle trainieren
-# ============================================================
-
-logistic_model.fit(X_train, y_train)
-bayes_model.fit(X_train, y_train)
-
-
-# ============================================================
-# 6. Vorhersagen
-# ============================================================
-
-y_pred_logistic = logistic_model.predict(X_test)
-y_pred_bayes = bayes_model.predict(X_test)
+    "k-NN": Pipeline([
+        ("scaler", StandardScaler()),
+        ("model", KNeighborsClassifier(
+            n_neighbors=5
+        ))
+    ])
+}
 
 
 # ============================================================
-# 7. Metriken berechnen
+# 5. Funktion zur Modellbewertung
 # ============================================================
 
-def calculate_metrics(y_true, y_pred):
+def evaluate_model(name, model):
 
-    return {
-        "Accuracy": accuracy_score(y_true, y_pred),
-        "Precision": precision_score(y_true, y_pred),
-        "Recall": recall_score(y_true, y_pred),
-        "F1": f1_score(y_true, y_pred)
+    # --------------------
+    # Training
+    # --------------------
+
+    start = time.perf_counter()
+
+    model.fit(X_train, y_train)
+
+    training_time = time.perf_counter() - start
+
+
+    # --------------------
+    # Prediction
+    # --------------------
+
+    start = time.perf_counter()
+
+    y_pred = model.predict(X_test)
+
+    prediction_time = time.perf_counter() - start
+
+
+    # --------------------
+    # Metriken
+    # --------------------
+
+    metrics = {
+        "Accuracy": accuracy_score(y_test, y_pred),
+        "Precision": precision_score(y_test, y_pred),
+        "Recall": recall_score(y_test, y_pred),
+        "F1": f1_score(y_test, y_pred),
+        "Training Time": training_time,
+        "Prediction Time": prediction_time
     }
 
 
-logistic_metrics = calculate_metrics(
-    y_test,
-    y_pred_logistic
+    # --------------------
+    # Ausgabe
+    # --------------------
+
+    print("\n" + "=" * 55)
+    print(name.upper())
+    print("=" * 55)
+
+    print(f"Accuracy:              {metrics['Accuracy']:.4f}")
+    print(f"Precision malignant:   {metrics['Precision']:.4f}")
+    print(f"Recall malignant:      {metrics['Recall']:.4f}")
+    print(f"F1-Score malignant:    {metrics['F1']:.4f}")
+
+    print(
+        f"\nTrainingszeit:         "
+        f"{metrics['Training Time']:.6f} Sekunden"
+    )
+
+    print(
+        f"Vorhersagezeit:        "
+        f"{metrics['Prediction Time']:.6f} Sekunden"
+    )
+
+    print("\nConfusion Matrix:")
+    print(confusion_matrix(y_test, y_pred))
+
+
+    return metrics, y_pred
+
+
+# ============================================================
+# 6. Alle Modelle ausführen
+# ============================================================
+
+results = {}
+predictions = {}
+
+
+for name, model in models.items():
+
+    metrics, y_pred = evaluate_model(
+        name,
+        model
+    )
+
+    results[name] = metrics
+    predictions[name] = y_pred
+
+
+# ============================================================
+# 7. Confusion Matrices
+# ============================================================
+
+fig, axes = plt.subplots(
+    1,
+    3,
+    figsize=(15, 4)
 )
 
-bayes_metrics = calculate_metrics(
-    y_test,
-    y_pred_bayes
+
+for ax, (name, y_pred) in zip(
+    axes,
+    predictions.items()
+):
+
+    ConfusionMatrixDisplay.from_predictions(
+        y_test,
+        y_pred,
+        display_labels=[
+            "Benign",
+            "Malignant"
+        ],
+        ax=ax,
+        colorbar=False
+    )
+
+    ax.set_title(name)
+
+
+fig.suptitle(
+    "Confusion Matrices"
 )
 
-
-# ============================================================
-# 8. Ergebnisse ausgeben
-# ============================================================
-
-print("\nLOGISTIC REGRESSION")
-print("=" * 40)
-
-for metric, value in logistic_metrics.items():
-    print(f"{metric}: {value:.4f}")
-
-
-print("\nGAUSSIAN NAIVE BAYES")
-print("=" * 40)
-
-for metric, value in bayes_metrics.items():
-    print(f"{metric}: {value:.4f}")
-
-
-# ============================================================
-# 9. Confusion Matrix - Logistic Regression
-# ============================================================
-
-ConfusionMatrixDisplay.from_predictions(
-    y_test,
-    y_pred_logistic,
-    display_labels=["Benign", "Malignant"]
-)
-
-plt.title("Confusion Matrix - Logistic Regression")
 plt.tight_layout()
+
+# Optional für dein Paper:
+# plt.savefig(
+#     "confusion_matrices.png",
+#     dpi=300
+# )
+
 plt.show()
 
 
 # ============================================================
-# 10. Confusion Matrix - Gaussian Naive Bayes
+# 8. ROC-Kurven
 # ============================================================
 
-ConfusionMatrixDisplay.from_predictions(
-    y_test,
-    y_pred_bayes,
-    display_labels=["Benign", "Malignant"]
-)
-
-plt.title("Confusion Matrix - Gaussian Naive Bayes")
-plt.tight_layout()
-plt.show()
-
-
-# ============================================================
-# 11. ROC-Kurven vergleichen
-# ============================================================
-
-fig, ax = plt.subplots(figsize=(7, 6))
-
-
-RocCurveDisplay.from_estimator(
-    logistic_model,
-    X_test,
-    y_test,
-    name="Logistic Regression",
-    ax=ax
+fig, ax = plt.subplots(
+    figsize=(8, 6)
 )
 
 
-RocCurveDisplay.from_estimator(
-    bayes_model,
-    X_test,
-    y_test,
-    name="Gaussian Naive Bayes",
-    ax=ax
-)
+for name, model in models.items():
+
+    RocCurveDisplay.from_estimator(
+        model,
+        X_test,
+        y_test,
+        name=name,
+        ax=ax
+    )
 
 
 # Zufallsklassifikator
@@ -235,15 +288,25 @@ ax.plot(
     label="Random Classifier"
 )
 
-ax.set_title("ROC Curve Comparison")
+ax.set_title(
+    "ROC Curve Comparison"
+)
+
 ax.legend()
 
 plt.tight_layout()
+
+# Optional:
+# plt.savefig(
+#     "roc_curves.png",
+#     dpi=300
+# )
+
 plt.show()
 
 
 # ============================================================
-# 12. Vergleich der Metriken
+# 9. Performance-Metriken vergleichen
 # ============================================================
 
 metric_names = [
@@ -254,46 +317,46 @@ metric_names = [
 ]
 
 
-logistic_values = [
-    logistic_metrics[metric]
-    for metric in metric_names
-]
+x = np.arange(
+    len(metric_names)
+)
+
+width = 0.25
 
 
-bayes_values = [
-    bayes_metrics[metric]
-    for metric in metric_names
-]
-
-
-x = np.arange(len(metric_names))
-
-width = 0.35
-
-
-fig, ax = plt.subplots(figsize=(9, 5))
-
-
-ax.bar(
-    x - width / 2,
-    logistic_values,
-    width,
-    label="Logistic Regression"
+fig, ax = plt.subplots(
+    figsize=(10, 6)
 )
 
 
-ax.bar(
-    x + width / 2,
-    bayes_values,
-    width,
-    label="Gaussian Naive Bayes"
+for index, (name, metrics) in enumerate(
+    results.items()
+):
+
+    values = [
+        metrics[metric]
+        for metric in metric_names
+    ]
+
+    position = (
+        x
+        + (index - 1) * width
+    )
+
+    ax.bar(
+        position,
+        values,
+        width,
+        label=name
+    )
+
+
+ax.set_ylabel(
+    "Score"
 )
-
-
-ax.set_ylabel("Score")
 
 ax.set_title(
-    "Performance Comparison"
+    "Model Performance Comparison"
 )
 
 ax.set_xticks(x)
@@ -310,563 +373,86 @@ ax.set_ylim(
 ax.legend()
 
 plt.tight_layout()
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
 
-from sklearn.model_selection import train_test_split
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
+# Optional:
+# plt.savefig(
+#     "performance_comparison.png",
+#     dpi=300
+# )
 
-from sklearn.linear_model import LogisticRegression
-from sklearn.naive_bayes import GaussianNB
-
-from sklearn.metrics import (
-            accuracy_score,
-                precision_score,
-                    recall_score,
-                        f1_score,
-                            ConfusionMatrixDisplay,
-                                RocCurveDisplay
-                                )
+plt.show()
 
 
 # ============================================================
-# 1. WDBC-Datensatz laden
+# 10. Laufzeiten vergleichen
 # ============================================================
 
-columns = [
-            "id",
-                "diagnosis",
+model_names = list(
+    results.keys()
+)
 
-                    "radius_mean",
-                        "texture_mean",
-                            "perimeter_mean",
-                                "area_mean",
-                                    "smoothness_mean",
-                                        "compactness_mean",
-                                            "concavity_mean",
-                                                "concave_points_mean",
-                                                    "symmetry_mean",
-                                                        "fractal_dimension_mean",
 
-                                                            "radius_se",
-                                                                "texture_se",
-                                                                    "perimeter_se",
-                                                                        "area_se",
-                                                                            "smoothness_se",
-                                                                                "compactness_se",
-                                                                                    "concavity_se",
-                                                                                        "concave_points_se",
-                                                                                            "symmetry_se",
-                                                                                                "fractal_dimension_se",
+training_times = [
+    results[name]["Training Time"]
+    for name in model_names
+]
 
-                                                                                                    "radius_worst",
-                                                                                                        "texture_worst",
-                                                                                                            "perimeter_worst",
-                                                                                                                "area_worst",
-                                                                                                                    "smoothness_worst",
-                                                                                                                        "compactness_worst",
-                                                                                                                            "concavity_worst",
-                                                                                                                                "concave_points_worst",
-                                                                                                                                    "symmetry_worst",
-                                                                                                                                        "fractal_dimension_worst"
-                                                                                                                                        ]
 
+prediction_times = [
+    results[name]["Prediction Time"]
+    for name in model_names
+]
 
-df = pd.read_csv(
-            "wdbc.data",
-                header=None,
-                    names=columns
-                    )
 
+x = np.arange(
+    len(model_names)
+)
 
-# ============================================================
-# 2. Features und Zielvariable
-# ============================================================
+width = 0.35
 
-# ID und Diagnose sind keine Features
-X = df.drop(columns=["id", "diagnosis"])
 
-# 1 = malignant
-# 0 = benign
-y = df["diagnosis"].map({
-        "M": 1,
-            "B": 0
-            })
+fig, ax = plt.subplots(
+    figsize=(10, 6)
+)
 
 
-# ============================================================
-# 3. Train-Test-Split
-# ============================================================
+ax.bar(
+    x - width / 2,
+    training_times,
+    width,
+    label="Training Time"
+)
 
-X_train, X_test, y_train, y_test = train_test_split(
-            X,
-                y,
-                    test_size=0.2,
-                        random_state=42,
-                            stratify=y
-                            )
+ax.bar(
+    x + width / 2,
+    prediction_times,
+    width,
+    label="Prediction Time"
+)
 
 
-# ============================================================
-# 4. Modelle definieren
-# ============================================================
+ax.set_ylabel(
+    "Time in seconds"
+)
 
-logistic_model = Pipeline([
-        ("scaler", StandardScaler()),
-            ("model", LogisticRegression(
-                        max_iter=1000,
-                                random_state=42
-                                    ))
-            ])
+ax.set_title(
+    "Computational Performance"
+)
 
+ax.set_xticks(x)
 
-bayes_model = GaussianNB()
+ax.set_xticklabels(
+    model_names
+)
 
+ax.legend()
 
-# ============================================================
-# 5. Modelle trainieren
-# ============================================================
+plt.tight_layout()
 
-logistic_model.fit(X_train, y_train)
-bayes_model.fit(X_train, y_train)
+# Optional:
+# plt.savefig(
+#     "runtime_comparison.png",
+#     dpi=300
+# )
 
-
-# ============================================================
-# 6. Vorhersagen
-# ============================================================
-
-y_pred_logistic = logistic_model.predict(X_test)
-y_pred_bayes = bayes_model.predict(X_test)
-
-
-# ============================================================
-# 7. Metriken berechnen
-# ============================================================
-
-def calculate_metrics(y_true, y_pred):
-
-        return {
-                        "Accuracy": accuracy_score(y_true, y_pred),
-                                "Precision": precision_score(y_true, y_pred),
-                                        "Recall": recall_score(y_true, y_pred),
-                                                "F1": f1_score(y_true, y_pred)
-                                                    }
-
-
-        logistic_metrics = calculate_metrics(
-                    y_test,
-                        y_pred_logistic
-                        )
-
-        bayes_metrics = calculate_metrics(
-                    y_test,
-                        y_pred_bayes
-                        )
-
-
-        # ============================================================
-        # 8. Ergebnisse ausgeben
-        # ============================================================
-
-        print("\nLOGISTIC REGRESSION")
-        print("=" * 40)
-
-        for metric, value in logistic_metrics.items():
-                print(f"{metric}: {value:.4f}")
-                print("\nGAUSSIAN NAIVE BAYES")
-                print("=" * 40)
-                for metric, value in bayes_metrics.items():
-                        print(f"{metric}: {value:.4f}")
-                        # ============================================================
-                        # 9. Confusion Matrix - Logistic Regression
-                        # ============================================================
-
-                        ConfusionMatrixDisplay.from_predictions(
-                                    y_test,
-                                        y_pred_logistic,
-                                            display_labels=["Benign", "Malignant"]
-                                            )
-
-                        plt.title("Confusion Matrix - Logistic Regression")
-                        plt.tight_layout()
-                        plt.show()
-                        # ============================================================
-                        # 10. Confusion Matrix - Gaussian Naive Bayes
-                        # ============================================================
-                        ConfusionMatrixDisplay.from_predictions(
-                                    y_test,
-                                        y_pred_bayes,
-                                            display_labels=["Benign", "Malignant"]
-                                            )
-                        plt.title("Confusion Matrix - Gaussian Naive Bayes")
-                        plt.tight_layout()
-                        plt.show()
-                        # ============================================================
-                        # 11. ROC-Kurven vergleichen
-                        # ============================================================
-                        fig, ax = plt.subplots(figsize=(7, 6))
-                        RocCurveDisplay.from_estimator(
-                                    logistic_model,
-                                        X_test,
-                                            y_test,
-                                                name="Logistic Regression",
-                                                    ax=ax
-                                                    )
-                        RocCurveDisplay.from_estimator(
-                                    bayes_model,
-                                        X_test,
-                                            y_test,
-                                                name="Gaussian Naive Bayes",
-                                                    ax=ax
-                                                    )
-                        # Zufallsklassifikator
-                        ax.plot(
-                                    [0, 1],
-                                        [0, 1],
-                                            linestyle="--",
-                                                label="Random Classifier"
-                                                )
-
-                        ax.set_title("ROC Curve Comparison")
-                        ax.legend()
-                        plt.tight_layout()
-                        plt.show()
-                        # ============================================================
-                        # 12. Vergleich der Metriken
-                        # ============================================================
-
-                        metric_names = [
-                                    "Accuracy",
-                                        "Precision",
-                                            "Recall",
-                                                "F1"
-                                                ]
-                        logistic_values = [
-                                    logistic_metrics[metric]
-                                        for metric in metric_names
-                                        ]
-
-                        bayes_values = [
-                                    bayes_metrics[metric]
-                                        for metric in metric_names
-                                        ]
-
-
-                        x = np.arange(len(metric_names))
-
-                        width = 0.35
-
-                        fig, ax = plt.subplots(figsize=(9, 5))
-
-                        ax.bar(
-                                    x - width / 2,
-                                        logistic_values,
-                                            width,
-                                                label="Logistic Regression"
-                                                )
-
-                        ax.bar(
-                                    x + width / 2,
-                                        bayes_values,
-                                            width,
-                                                label="Gaussian Naive Bayes"
-                                                )
-
-                        ax.set_ylabel("Score")
-
-                        ax.set_title(
-                                    "Performance Comparison"
-                                    )
-
-                        ax.set_xticks(x)
-
-                        ax.set_xticklabels(
-                                    metric_names
-                                    )
-
-                        ax.set_ylim(
-                                    0,
-                                        1.05
-                                        )
-
-                        ax.legend()
-
-                        plt.tight_layout()
-                        import pandas as pd
-                        import numpy as np
-                        import matplotlib.pyplot as plt
-
-                        from sklearn.model_selection import train_test_split
-                        from sklearn.pipeline import Pipeline
-                        from sklearn.preprocessing import StandardScaler
-
-                        from sklearn.linear_model import LogisticRegression
-                        from sklearn.naive_bayes import GaussianNB
-
-                        from sklearn.metrics import (
-                                    accuracy_score,
-                                        precision_score,
-                                            recall_score,
-                                                f1_score,
-                                                    ConfusionMatrixDisplay,
-                                                        RocCurveDisplay
-                                                        )
-                        # ============================================================
-                        # 1. WDBC-Datensatz laden
-                        # ============================================================
-
-                        columns = [
-                                    "id",
-                                        "diagnosis",
-                                            "radius_mean",
-                                                "texture_mean",
-                                                    "perimeter_mean",
-                                                        "area_mean",
-                                                            "smoothness_mean",
-                                                                "compactness_mean",
-                                                                    "concavity_mean",
-                                                                        "concave_points_mean",
-                                                                            "symmetry_mean",
-                                                                                "fractal_dimension_mean",
-                                                                                    "radius_se",
-                                                                                        "texture_se",
-                                                                                            "perimeter_se",
-                                                                                                "area_se",
-                                                                                                    "smoothness_se",
-                                                                                                        "compactness_se",
-                                                                                                            "concavity_se",
-                                                                                                                "concave_points_se",
-                                                                                                                    "symmetry_se",
-                                                                                                                        "fractal_dimension_se",
-                                                                                                                            "radius_worst",
-                                                                                                                                "texture_worst",
-                                                                                                                                    "perimeter_worst",
-                                                                                                                                        "area_worst",
-                                                                                                                                            "smoothness_worst",
-                                                                                                                                                "compactness_worst",
-                                                                                                                                                    "concavity_worst",
-                                                                                                                                                        "concave_points_worst",
-                                                                                                                                                            "symmetry_worst",
-                                                                                                                                                                "fractal_dimension_worst"
-                                                                                                                                                                ]
-
-
-                        df = pd.read_csv(
-                                    "wdbc.data",
-                                        header=None,
-                                            names=columns
-                                            )
-                        # ============================================================
-                        # 2. Features und Zielvariable
-                        # ============================================================
-                        # ID und Diagnose sind keine Features
-                        X = df.drop(columns=["id", "diagnosis"])
-
-                        # 1 = malignant
-                        # 0 = benign
-                        y = df["diagnosis"].map({
-                                "M": 1,
-                                    "B": 0
-                                    })
-                        # ============================================================
-                        # 3. Train-Test-Split
-                        # ============================================================
-                        X_train, X_test, y_train, y_test = train_test_split(
-                                    X,
-                                        y,
-                                            test_size=0.2,
-                                                random_state=42,
-                                                    stratify=y
-                                                    )
-                        # ============================================================
-                        # 4. Modelle definieren
-                        # ============================================================
-                        logistic_model = Pipeline([
-                                ("scaler", StandardScaler()),
-                                    ("model", LogisticRegression(
-                                                max_iter=1000,
-                                                        random_state=42
-                                                            ))
-                                    ])
-
-
-                        bayes_model = GaussianNB()
-                        # ============================================================
-                        # 5. Modelle trainieren
-                        # ============================================================
-
-                        logistic_model.fit(X_train, y_train)
-                        bayes_model.fit(X_train, y_train)
-                        # ============================================================
-                        # 6. Vorhersagen
-                        # ============================================================
-                        y_pred_logistic = logistic_model.predict(X_test)
-                        y_pred_bayes = bayes_model.predict(X_test)
-                        # ===========================================================
-                        # 7. Metriken berechnen
-                        # ============================================================
-
-                        def calculate_metrics(y_true, y_pred):
-                                return {
-                                                "Accuracy": accuracy_score(y_true, y_pred),
-                                                        "Precision": precision_score(y_true, y_pred),
-                                                                "Recall": recall_score(y_true, y_pred),
-                                                                        "F1": f1_score(y_true, y_pred)
-                                                                            }
-                                logistic_metrics = calculate_metrics(
-                                            y_test,
-                                                y_pred_logistic
-                                                )
-
-                                bayes_metrics = calculate_metrics(
-                                            y_test,
-                                                y_pred_bayes
-                                                )
-                                # ============================================================
-                                # 8. Ergebnisse ausgeben
-                                # ============================================================
-
-                                print("\nLOGISTIC REGRESSION")
-                                print("=" * 40)
-
-                                for metric, value in logistic_metrics.items():
-                                        print(f"{metric}: {value:.4f}")
-                                        print("\nGAUSSIAN NAIVE BAYES")
-                                        print("=" * 40)
-
-                                        for metric, value in bayes_metrics.items():
-                                                print(f"{metric}: {value:.4f}")
-                                                # ============================================================
-                                                # 9. Confusion Matrix - Logistic Regression
-                                                # ============================================================
-                                                ConfusionMatrixDisplay.from_predictions(
-                                                            y_test,
-                                                                y_pred_logistic,
-                                                                    display_labels=["Benign", "Malignant"]
-                                                                    )
-
-                                                plt.title("Confusion Matrix - Logistic Regression")
-                                                plt.tight_layout()
-                                                plt.show()
-                                                # ============================================================
-                                                # 10. Confusion Matrix - Gaussian Naive Bayes
-                                                # ============================================================
-                                                ConfusionMatrixDisplay.from_predictions(
-                                                            y_test,
-                                                                y_pred_bayes,
-                                                                    display_labels=["Benign", "Malignant"]
-                                                                    )
-
-                                                plt.title("Confusion Matrix - Gaussian Naive Bayes")
-                                                plt.tight_layout()
-                                                plt.show()
-                                                # ============================================================
-                                                # 11. ROC-Kurven vergleichen
-                                                # ============================================================
-                                                fig, ax = plt.subplots(figsize=(7, 6))
-
-
-                                                RocCurveDisplay.from_estimator(
-                                                            logistic_model,
-                                                                X_test,
-                                                                    y_test,
-                                                                        name="Logistic Regression",
-                                                                            ax=ax
-                                                                            )
-
-
-                                                RocCurveDisplay.from_estimator(
-                                                            bayes_model,
-                                                                X_test,
-                                                                    y_test,
-                                                                        name="Gaussian Naive Bayes",
-                                                                            ax=ax
-                                                                            )
-
-
-                                                # Zufallsklassifikator
-                                                ax.plot(
-                                                            [0, 1],
-                                                                [0, 1],
-                                                                    linestyle="--",
-                                                                        label="Random Classifier"
-                                                                        )
-
-                                                ax.set_title("ROC Curve Comparison")
-                                                ax.legend()
-
-                                                plt.tight_layout()
-                                                plt.show()
-
-
-                                                # ============================================================
-                                                # 12. Vergleich der Metriken
-                                                # ============================================================
-
-                                                metric_names = [
-                                                            "Accuracy",
-                                                                "Precision",
-                                                                    "Recall",
-                                                                        "F1"
-                                                                        ]
-
-
-                                                logistic_values = [
-                                                            logistic_metrics[metric]
-                                                                for metric in metric_names
-                                                                ]
-
-
-                                                bayes_values = [
-                                                            bayes_metrics[metric]
-                                                                for metric in metric_names
-                                                                ]
-
-
-                                                x = np.arange(len(metric_names))
-
-                                                width = 0.35
-
-
-                                                fig, ax = plt.subplots(figsize=(9, 5))
-
-
-                                                ax.bar(
-                                                            x - width / 2,
-                                                                logistic_values,
-                                                                    width,
-                                                                        label="Logistic Regression"
-                                                                        )
-
-
-                                                ax.bar(
-                                                            x + width / 2,
-                                                                bayes_values,
-                                                                    width,
-                                                                        label="Gaussian Naive Bayes"
-                                                                        )
-
-
-                                                ax.set_ylabel("Score")
-
-                                                ax.set_title(
-                                                            "Performance Comparison"
-                                                            )
-
-                                                ax.set_xticks(x)
-
-                                                ax.set_xticklabels(
-                                                            metric_names
-                                                            )
-
-                                                ax.set_ylim(
-                                                            0,
-                                                                1.05
-                                                                )
-
-                                                ax.legend()
-
-                                                plt.tight_layout()
-                                                plt.show()
+plt.show()
