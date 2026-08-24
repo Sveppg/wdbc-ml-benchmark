@@ -1,6 +1,14 @@
 # WDBC-BreastCancer Benchmark based on different ML Algorithms
 
-A scientific approach to 
+A scientific approach of different ML Modells to evaluate the Breast Cancer Wisconsin (Diagnostic) Dataset.
+https://archive.ics.uci.edu/dataset/17/breast+cancer+wisconsin+diagnostic
+Modells used: 
+- Logic Regression
+- naive Bayes
+- k-NN
+- SVM
+- Random Forest
+
 
 ## Requirements 
 - Python 3.12.xx
@@ -8,7 +16,7 @@ A scientific approach to
 - Pandas 2.1.4
 - numpy 1.26.4
 - matplot 3.6.3
-s
+
 
 
 
