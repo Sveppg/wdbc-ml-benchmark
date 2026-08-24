@@ -25,9 +25,7 @@ from sklearn.metrics import (
 )
 
 
-# ============================================================
-# 1. WDBC-Datensatz laden
-# ============================================================
+# load data set as csv
 
 columns = [
     "id",
@@ -74,11 +72,7 @@ df = pd.read_csv(
     names=columns
 )
 
-
-# ============================================================
-# 2. Features und Zielvariable
-# ============================================================
-
+# feature for malign n benign
 X = df.drop(columns=["id", "diagnosis"])
 
 # malignant = 1
@@ -89,10 +83,7 @@ y = df["diagnosis"].map({
 })
 
 
-# ============================================================
-# 3. Train-Test-Split
-# ============================================================
-
+# train and test data seperation 80/20 split
 X_train, X_test, y_train, y_test = train_test_split(
     X,
     y,
@@ -102,9 +93,7 @@ X_train, X_test, y_train, y_test = train_test_split(
 )
 
 
-# ============================================================
-# 4. Modelle
-# ============================================================
+# modells sklearn
 models = {
 
     "Logistic Regression": Pipeline([
@@ -139,13 +128,10 @@ models = {
     )
 }
 
-# ============================================================
-# 5. Modell bewerten
-# ============================================================
-
+# evalution for training time
 def evaluate_model(name, model):
 
-    # Trainingszeit
+    #training time
     start = time.perf_counter()
 
     model.fit(X_train, y_train)
@@ -153,7 +139,7 @@ def evaluate_model(name, model):
     training_time = time.perf_counter() - start
 
 
-    # Vorhersagezeit
+    # predicition time
     start = time.perf_counter()
 
     y_pred = model.predict(X_test)
@@ -161,7 +147,7 @@ def evaluate_model(name, model):
     prediction_time = time.perf_counter() - start
 
 
-    # Metriken
+    
     metrics = {
         "Accuracy": accuracy_score(y_test, y_pred),
         "Precision": precision_score(y_test, y_pred),
@@ -172,7 +158,7 @@ def evaluate_model(name, model):
     }
 
 
-    # Ausgabe
+   
     print("\n" + "=" * 55)
     print(name.upper())
     print("=" * 55)
@@ -198,10 +184,6 @@ def evaluate_model(name, model):
     return metrics, y_pred
 
 
-# ============================================================
-# 6. Alle Modelle ausführen
-# ============================================================
-
 results = {}
 predictions = {}
 
@@ -217,10 +199,7 @@ for name, model in models.items():
     predictions[name] = y_pred
 
 
-# ============================================================
-# 7. Confusion Matrices
-# ============================================================
-
+# metrics for confusion for each modell
 number_of_models = len(models)
 
 fig, axes = plt.subplots(
@@ -252,7 +231,7 @@ fig.suptitle(
 
 plt.tight_layout()
 
-# Für das Paper:
+
 # plt.savefig(
 #     "confusion_matrices.png",
 #     dpi=300,
@@ -262,10 +241,7 @@ plt.tight_layout()
 plt.show()
 
 
-# ============================================================
-# 8. ROC-Kurven
-# ============================================================
-
+# roc curve / graphing
 fig, ax = plt.subplots(
     figsize=(8, 6)
 )
@@ -305,11 +281,7 @@ plt.tight_layout()
 
 plt.show()
 
-
-# ============================================================
-# 9. Performance-Metriken vergleichen
-# ============================================================
-
+# performance graphing
 metric_names = [
     "Accuracy",
     "Precision",
@@ -385,9 +357,7 @@ plt.tight_layout()
 plt.show()
 
 
-# ============================================================
-# 10. Laufzeiten vergleichen
-# ============================================================
+# runtime diagramms
 
 model_names = list(
     results.keys()
