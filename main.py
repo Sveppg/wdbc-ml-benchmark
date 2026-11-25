@@ -1,3 +1,4 @@
+
 import time
 
 import matplotlib.pyplot as plt
@@ -25,8 +26,11 @@ from sklearn.metrics import (
 )
 
 
-# load data set as csv
+# --------------------------------------------------
+# Dataset Loading and Preprocessing
+# --------------------------------------------------
 
+# Column names according to the original WDBC dataset
 columns = [
     "id",
     "diagnosis",
@@ -65,25 +69,31 @@ columns = [
     "fractal_dimension_worst"
 ]
 
-
+# Load the dataset without an existing header
 df = pd.read_csv(
     "wdbc.data",
     header=None,
     names=columns
 )
 
-# feature for malign n benign
+# Extract the 30 numerical input features
 X = df.drop(columns=["id", "diagnosis"])
 
-# malignant = 1
-# benign    = 0
+# Encode the binary target variable
+# Malignant = 1 (positive class)
+# Benign    = 0 (negative class)
 y = df["diagnosis"].map({
     "M": 1,
     "B": 0
 })
 
 
-# train and test data seperation 80/20 split
+# --------------------------------------------------
+# Train-Test Split
+# --------------------------------------------------
+
+# Stratified 80/20 split to preserve class distribution
+# A fixed random seed improves reproducibility
 X_train, X_test, y_train, y_test = train_test_split(
     X,
     y,
@@ -93,9 +103,15 @@ X_train, X_test, y_train, y_test = train_test_split(
 )
 
 
-# modells sklearn
+# --------------------------------------------------
+# Machine Learning Models
+# --------------------------------------------------
+
+# Pipelines apply feature scaling during model training
+# and prevent data leakage from the test dataset
 models = {
 
+    # Linear classification model
     "Logistic Regression": Pipeline([
         ("scaler", StandardScaler()),
         ("model", LogisticRegression(
@@ -104,8 +120,10 @@ models = {
         ))
     ]),
 
+    # Probabilistic classifier based on Bayes' theorem
     "Gaussian Naive Bayes": GaussianNB(),
 
+    # Distance-based classification using five neighbors
     "k-NN": Pipeline([
         ("scaler", StandardScaler()),
         ("model", KNeighborsClassifier(
@@ -113,6 +131,7 @@ models = {
         ))
     ]),
 
+    # Support Vector Machine with default RBF kernel
     "SVM": Pipeline([
         ("scaler", StandardScaler()),
         ("model", SVC(
@@ -121,6 +140,8 @@ models = {
         ))
     ]),
 
+    # Ensemble of 100 decision trees
+    # Use all available CPU cores where supported
     "Random Forest": RandomForestClassifier(
         n_estimators=100,
         random_state=42,
@@ -128,26 +149,30 @@ models = {
     )
 }
 
-# evalution for training time
-def evaluate_model(name, model):
 
-    #training time
+# --------------------------------------------------
+# Model Evaluation
+# --------------------------------------------------
+
+def evaluate_model(name, model):
+    """Train and evaluate a classification model."""
+
+    # Measure model training time
     start = time.perf_counter()
 
     model.fit(X_train, y_train)
 
     training_time = time.perf_counter() - start
 
-
-    # predicition time
+    # Measure prediction time on the test dataset
     start = time.perf_counter()
 
     y_pred = model.predict(X_test)
 
     prediction_time = time.perf_counter() - start
 
-
-    
+    # Calculate classification and computational metrics
+    # Precision, recall and F1 refer to the malignant class
     metrics = {
         "Accuracy": accuracy_score(y_test, y_pred),
         "Precision": precision_score(y_test, y_pred),
@@ -157,8 +182,7 @@ def evaluate_model(name, model):
         "Prediction Time": prediction_time
     }
 
-
-   
+    # Display evaluation results in the console
     print("\n" + "=" * 55)
     print(name.upper())
     print("=" * 55)
@@ -169,50 +193,50 @@ def evaluate_model(name, model):
     print(f"F1-Score malignant:    {metrics['F1']:.4f}")
 
     print(
-        f"\nTrainingszeit:         "
-        f"{metrics['Training Time']:.6f} Sekunden"
+        f"\nTraining Time:         "
+        f"{metrics['Training Time']:.6f} seconds"
     )
 
     print(
-        f"Vorhersagezeit:        "
-        f"{metrics['Prediction Time']:.6f} Sekunden"
+        f"Prediction Time:       "
+        f"{metrics['Prediction Time']:.6f} seconds"
     )
 
+    # Rows represent actual classes, columns predicted classes
     print("\nConfusion Matrix:")
     print(confusion_matrix(y_test, y_pred))
 
     return metrics, y_pred
 
 
+# Store evaluation metrics and predictions for each model
 results = {}
 predictions = {}
 
-
+# Train and evaluate all defined models
 for name, model in models.items():
 
-    metrics, y_pred = evaluate_model(
-        name,
-        model
-    )
+    metrics, y_pred = evaluate_model(name, model)
 
     results[name] = metrics
     predictions[name] = y_pred
 
 
-# metrics for confusion for each modell
+# --------------------------------------------------
+# Confusion Matrices
+# --------------------------------------------------
+
 number_of_models = len(models)
 
+# Create one subplot for each classification model
 fig, axes = plt.subplots(
     1,
     number_of_models,
     figsize=(5 * number_of_models, 4)
 )
 
-
-for ax, (name, y_pred) in zip(
-    axes,
-    predictions.items()
-):
+# Visualize correct and incorrect classifications
+for ax, (name, y_pred) in zip(axes, predictions.items()):
 
     ConfusionMatrixDisplay.from_predictions(
         y_test,
@@ -224,14 +248,11 @@ for ax, (name, y_pred) in zip(
 
     ax.set_title(name)
 
-
-fig.suptitle(
-    "Confusion Matrices"
-)
+fig.suptitle("Confusion Matrices")
 
 plt.tight_layout()
 
-
+# Optional: export the figure as a high-resolution image
 # plt.savefig(
 #     "confusion_matrices.png",
 #     dpi=300,
@@ -241,12 +262,14 @@ plt.tight_layout()
 plt.show()
 
 
-# roc curve / graphing
-fig, ax = plt.subplots(
-    figsize=(8, 6)
-)
+# --------------------------------------------------
+# ROC Curve and AUC Comparison
+# --------------------------------------------------
 
+fig, ax = plt.subplots(figsize=(8, 6))
 
+# Plot ROC curves and AUC scores for all trained models
+# SVM uses decision scores instead of class probabilities
 for name, model in models.items():
 
     RocCurveDisplay.from_estimator(
@@ -257,7 +280,7 @@ for name, model in models.items():
         ax=ax
     )
 
-
+# Add a random classifier as a reference baseline
 ax.plot(
     [0, 1],
     [0, 1],
@@ -265,14 +288,12 @@ ax.plot(
     label="Random Classifier"
 )
 
-ax.set_title(
-    "ROC Curve Comparison"
-)
-
+ax.set_title("ROC Curve Comparison")
 ax.legend()
 
 plt.tight_layout()
 
+# Optional: export the ROC comparison
 # plt.savefig(
 #     "roc_curves.png",
 #     dpi=300,
@@ -281,7 +302,12 @@ plt.tight_layout()
 
 plt.show()
 
-# performance graphing
+
+# --------------------------------------------------
+# Classification Performance Comparison
+# --------------------------------------------------
+
+# Select the classification metrics to be visualized
 metric_names = [
     "Accuracy",
     "Precision",
@@ -289,30 +315,24 @@ metric_names = [
     "F1"
 ]
 
-
-x = np.arange(
-    len(metric_names)
-)
+x = np.arange(len(metric_names))
 
 number_of_models = len(models)
 
+# Calculate the bar width for grouped visualization
 width = 0.8 / number_of_models
 
+fig, ax = plt.subplots(figsize=(11, 6))
 
-fig, ax = plt.subplots(
-    figsize=(11, 6)
-)
-
-
-for index, (name, metrics) in enumerate(
-    results.items()
-):
+# Plot classification metrics for each model
+for index, (name, metrics) in enumerate(results.items()):
 
     values = [
         metrics[metric]
         for metric in metric_names
     ]
 
+    # Center the grouped bars around each metric
     offset = (
         index - (number_of_models - 1) / 2
     ) * width
@@ -324,30 +344,20 @@ for index, (name, metrics) in enumerate(
         label=name
     )
 
-
-ax.set_ylabel(
-    "Score"
-)
-
-ax.set_title(
-    "Model Performance Comparison"
-)
+ax.set_ylabel("Score")
+ax.set_title("Model Performance Comparison")
 
 ax.set_xticks(x)
+ax.set_xticklabels(metric_names)
 
-ax.set_xticklabels(
-    metric_names
-)
-
-ax.set_ylim(
-    0,
-    1.05
-)
+# Classification scores range from 0 to 1
+ax.set_ylim(0, 1.05)
 
 ax.legend()
 
 plt.tight_layout()
 
+# Optional: export the classification comparison
 # plt.savefig(
 #     "performance_comparison.png",
 #     dpi=300,
@@ -357,37 +367,30 @@ plt.tight_layout()
 plt.show()
 
 
-# runtime diagramms
+# --------------------------------------------------
+# Computational Performance Comparison
+# --------------------------------------------------
 
-model_names = list(
-    results.keys()
-)
-
+# Extract measured execution times for each model
+model_names = list(results.keys())
 
 training_times = [
     results[name]["Training Time"]
     for name in model_names
 ]
 
-
 prediction_times = [
     results[name]["Prediction Time"]
     for name in model_names
 ]
 
-
-x = np.arange(
-    len(model_names)
-)
+x = np.arange(len(model_names))
 
 width = 0.35
 
+fig, ax = plt.subplots(figsize=(11, 6))
 
-fig, ax = plt.subplots(
-    figsize=(11, 6)
-)
-
-
+# Plot training and prediction times side by side
 ax.bar(
     x - width / 2,
     training_times,
@@ -402,25 +405,17 @@ ax.bar(
     label="Prediction Time"
 )
 
-
-ax.set_ylabel(
-    "Time in seconds"
-)
-
-ax.set_title(
-    "Computational Performance"
-)
+ax.set_ylabel("Time in seconds")
+ax.set_title("Computational Performance")
 
 ax.set_xticks(x)
-
-ax.set_xticklabels(
-    model_names
-)
+ax.set_xticklabels(model_names)
 
 ax.legend()
 
 plt.tight_layout()
 
+# Optional: export the computational comparison
 # plt.savefig(
 #     "runtime_comparison.png",
 #     dpi=300,
